@@ -1,0 +1,39 @@
+name: Build N64 ROM
+
+on:
+  push:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install build tools
+        run: sudo apt install -y build-essential git
+
+      - name: Install libdragon
+        run: |
+          git clone https://github.com/DragonMinded/libdragon.git
+          cd libdragon
+          ./build.sh
+          echo "N64_INST=$PWD/toolchain" >> $GITHUB_ENV
+
+      - name: Build ROM
+        run: make
+
+      - name: Convert ROM formats
+        run: |
+          ROM="mygame.z64"
+          dd if="$ROM" of="${ROM%.z64}.n64" conv=swab
+          dd if="$ROM" of="${ROM%.z64}.v64" conv=notrunc,swab
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: n64-rom
+          path: |
+            mygame.z64
+            mygame.n64
+            mygame.v64
