@@ -1,38 +1,33 @@
-# N64 ROM Build Makefile
-# Supports OPTIONS=n64 or OPTIONS=z64
-# Default format: z64
+# N64 Build Makefile
+# Supports: n64 and z64 outputs
 
-# Path to libdragon
-LIBDRAGON := ./libdragon
-LIBDRAGON_INSTALL := $(LIBDRAGON)/install
+# Local libdragon paths
+LIBDRAGON_DIR := $(CURDIR)/libdragon
+LIBDRAGON_BUILD := $(CURDIR)/libdragon_build
 
-# Output directory
-BUILD_DIR := build
+CC := mips64-elf-gcc
+CFLAGS := -O2 -G0 -Wall -I$(LIBDRAGON_DIR)/include
+LDFLAGS := -L$(LIBDRAGON_BUILD)/lib -ldragon
+
+TARGET := build/mygame
 SRC := main.c
 
-# ROM format
-FORMAT ?= z64
-ifeq ($(OPTIONS),)
-	FORMAT := z64
-else
-	FORMAT := $(OPTIONS)
-endif
+# ROM format: n64 or z64
+ROM_FORMAT ?= z64
 
-# Compiler
-CC := mips-linux-gnu-gcc
-CFLAGS := -I$(LIBDRAGON_INSTALL)/include -O2 -G0 -Wall -mno-abicalls
-LDFLAGS := -L$(LIBDRAGON_INSTALL)/lib -ldragon
+# Output files
+N64_ROM := $(TARGET).n64
+Z64_ROM := $(TARGET).z64
 
-# Output ROM
-ROM_NAME := game.$(FORMAT)
+all: $(N64_ROM) $(Z64_ROM)
 
-all: $(BUILD_DIR)/$(ROM_NAME)
+$(N64_ROM): $(SRC)
+	$(CC) $(CFLAGS) -o $(TARGET).elf $^ $(LDFLAGS)
+	$(LIBDRAGON_DIR)/tools/elf2n64 $(TARGET).elf $(N64_ROM)
 
-$(BUILD_DIR)/$(ROM_NAME): $(SRC)
-	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)/game.elf $(LDFLAGS)
-	$(LIBDRAGON_INSTALL)/bin/romconv $(BUILD_DIR)/game.elf -o $(BUILD_DIR)/$(ROM_NAME) -f $(FORMAT)
-	@echo "Built ROM: $(BUILD_DIR)/$(ROM_NAME)"
+$(Z64_ROM): $(SRC)
+	$(CC) $(CFLAGS) -o $(TARGET).elf $^ $(LDFLAGS)
+	$(LIBDRAGON_DIR)/tools/elf2z64 $(TARGET).elf $(Z64_ROM)
 
 clean:
-	rm -rf $(BUILD_DIR)/*.elf $(BUILD_DIR)/*.z64 $(BUILD_DIR)/*.n64
+	rm -rf build/*.elf build/*.n64 build/*.z64
