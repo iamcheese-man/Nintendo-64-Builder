@@ -1,30 +1,38 @@
-# Makefile for building N64 ROMs
-TARGET = mygame
+# N64 ROM Build Makefile
+# Supports OPTIONS=n64 or OPTIONS=z64
+# Default format: z64
 
-# Compiler and flags (using libdragon toolchain)
-CC = mips64-elf-gcc
-CFLAGS = -O2 -G0 -Wall -Ilibdragon/include
-LDFLAGS = -T libdragon/build/crt0.ld -Llibdragon/build -ldragon
+# Path to libdragon
+LIBDRAGON := ./libdragon
+LIBDRAGON_INSTALL := $(LIBDRAGON)/install
 
-SRCS = main.c
-OBJS = $(SRCS:.c=.o)
+# Output directory
+BUILD_DIR := build
+SRC := main.c
 
-all: $(TARGET).z64 $(TARGET).n64 $(TARGET).v64
+# ROM format
+FORMAT ?= z64
+ifeq ($(OPTIONS),)
+	FORMAT := z64
+else
+	FORMAT := $(OPTIONS)
+endif
 
-# Standard Z64 output
-$(TARGET).z64: $(OBJS)
-	$(CC) $(OBJS) -o $@ $(LDFLAGS)
+# Compiler
+CC := mips-linux-gnu-gcc
+CFLAGS := -I$(LIBDRAGON_INSTALL)/include -O2 -G0 -Wall -mno-abicalls
+LDFLAGS := -L$(LIBDRAGON_INSTALL)/lib -ldragon
 
-# Convert Z64 → N64 (byteswapped)
-$(TARGET).n64: $(TARGET).z64
-	dd if=$< of=$@ conv=swab
+# Output ROM
+ROM_NAME := game.$(FORMAT)
 
-# Convert Z64 → V64 (byteswapped + 0x4000 header)
-$(TARGET).v64: $(TARGET).z64
-	dd if=$< of=$@ bs=1 skip=0 conv=swab
+all: $(BUILD_DIR)/$(ROM_NAME)
 
-%.o: %.c
-	$(CC) $(CFLAGS) -c $< -o $@
+$(BUILD_DIR)/$(ROM_NAME): $(SRC)
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CFLAGS) $< -o $(BUILD_DIR)/game.elf $(LDFLAGS)
+	$(LIBDRAGON_INSTALL)/bin/romconv $(BUILD_DIR)/game.elf -o $(BUILD_DIR)/$(ROM_NAME) -f $(FORMAT)
+	@echo "Built ROM: $(BUILD_DIR)/$(ROM_NAME)"
 
 clean:
-	rm -f $(OBJS) $(TARGET).z64 $(TARGET).n64 $(TARGET).v64
+	rm -rf $(BUILD_DIR)/*.elf $(BUILD_DIR)/*.z64 $(BUILD_DIR)/*.n64
