@@ -1,27 +1,26 @@
-# N64 Builder Makefile
-CC = gcc
-CFLAGS = -O2 -Wall
-LD = gcc
-LDFLAGS = -Llibdragon_build/usr/local/lib -ldragon
-INCLUDES = -Ilibdragon_build/usr/local/include
+CC := mips64el-elf-gcc
+CFLAGS := -O2 -Ilibdragon_build/include
+LDFLAGS := -Llibdragon_build/lib -ldragon
+SRC := main.c
+ELF := build/main.elf
+ROM_N64 := build/main.n64
+ROM_Z64 := build/main.z64
+ROM_V64 := build/main.v64
 
-SRC = main.c
-OBJ = $(SRC:.c=.o)
+all: $(ROM_N64)
 
-ROMNAME = game
+$(ELF): $(SRC)
+	mkdir -p build
+	$(CC) $(CFLAGS) $< $(LDFLAGS) -o $@
 
-format ?= n64
+$(ROM_N64): $(ELF)
+	python3 libdragon/tools/elf2n64.py $(ELF) $(ROM_N64)
 
-all: $(ROMNAME).$(format)
+$(ROM_Z64): $(ELF)
+	python3 libdragon/tools/elf2n64.py --z64 $(ELF) $(ROM_Z64)
 
-%.o: %.c
-	$(CC) $(CFLAGS) $(INCLUDES) -c $< -o $@
-
-$(ROMNAME).n64: $(OBJ)
-	$(LD) $(OBJ) $(LDFLAGS) -o build/$@
-
-$(ROMNAME).z64: $(OBJ)
-	$(LD) $(OBJ) $(LDFLAGS) -o build/$@
+$(ROM_V64): $(ELF)
+	python3 libdragon/tools/elf2n64.py --v64 $(ELF) $(ROM_V64)
 
 clean:
-	rm -rf build/*.n64 build/*.z64 *.o
+	rm -rf build
