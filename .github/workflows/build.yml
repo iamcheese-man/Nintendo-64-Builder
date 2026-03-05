@@ -1,54 +1,55 @@
-name: Nintendo 64 Build
+name: Build N64 ROM
 
 on:
   workflow_dispatch:
     inputs:
       rom_type:
-        description: 'ROM type to output (n64, z64, v64)'
+        description: 'ROM type (n64, z64, v64)'
         required: true
-        default: n64
+        default: 'n64'
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
       ROM_TYPE: ${{ github.event.inputs.rom_type }}
-      BUILD_DIR: ${{ github.workspace }}/build
-      LIBDRAGON_DIR: ${{ github.workspace }}/libdragon
-      LIBDRAGON_BUILD: ${{ github.workspace }}/libdragon_build
-
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout Repo
+        uses: actions/checkout@v4
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y git make gcc mips64el-elf-gcc build-essential
+          sudo apt-get install -y git make build-essential curl tar
 
-      - name: Clone Libdragon if missing
+      - name: Setup MIPS Toolchain
         run: |
-          if [ ! -d "$LIBDRAGON_DIR" ]; then
-            git clone https://github.com/DragonMinded/libdragon.git $LIBDRAGON_DIR
+          mkdir -p toolchain
+          curl -L https://github.com/DragonMinded/libdragon/releases/download/0.6.0/mips64el-elf-toolchain-ubuntu.tar.gz | tar xz -C toolchain
+          echo "$PWD/toolchain/bin" >> $GITHUB_PATH
+
+      - name: Build Libdragon
+        run: |
+          mkdir -p libdragon_build
+          make -C libdragon DESTDIR=$PWD/libdragon_build PREFIX=$PWD/libdragon_build install
+
+      - name: Build ROM
+        run: |
+          mkdir -p build
+          mips64el-elf-gcc -Ilibdragon_build/include main.c -Llibdragon_build/lib -ldragon -o build/main.elf
+          if [ "$ROM_TYPE" = "n64" ]; then
+            python3 libdragon/tools/elf2n64.py build/main.elf build/main.n64
+          elif [ "$ROM_TYPE" = "z64" ]; then
+            python3 libdragon/tools/elf2n64.py --z64 build/main.elf build/main.z64
+          elif [ "$ROM_TYPE" = "v64" ]; then
+            python3 libdragon/tools/elf2n64.py --v64 build/main.elf build/main.v64
+          else
+            echo "Invalid ROM_TYPE: $ROM_TYPE"
+            exit 1
           fi
-
-      - name: Build libdragon locally
-        run: |
-          mkdir -p $LIBDRAGON_BUILD
-          make -C $LIBDRAGON_DIR DESTDIR=$LIBDRAGON_BUILD PREFIX=$LIBDRAGON_BUILD install
-
-      - name: Make build directory
-        run: mkdir -p $BUILD_DIR
-
-      - name: Compile ROM
-        run: |
-          gcc -Wall -I$LIBDRAGON_BUILD/include \
-              -L$LIBDRAGON_BUILD/lib -ldragon \
-              main.c -o $BUILD_DIR/main.elf
-          # Convert ELF to ROM type
-          $LIBDRAGON_DIR/mtools/make -f $BUILD_DIR/main.elf -o $BUILD_DIR/main.$ROM_TYPE -t $ROM_TYPE
 
       - name: Upload ROM
         uses: actions/upload-artifact@v4
         with:
           name: n64-rom
-          path: $BUILD_DIR
+          path: build/*
