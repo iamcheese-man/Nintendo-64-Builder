@@ -1,10 +1,14 @@
-name: Build N64 ROM
+name: Nintendo 64 Builder
 
 on:
   workflow_dispatch:
     inputs:
-      rom_type:
-        description: 'ROM type (n64, z64, v64)'
+      rom_name:
+        description: 'Name of your ROM (without extension)'
+        required: true
+        default: 'game'
+      output_format:
+        description: 'Output format (n64, z64, v64)'
         required: true
         default: 'n64'
 
@@ -12,44 +16,41 @@ jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      ROM_TYPE: ${{ github.event.inputs.rom_type }}
+      ROM_NAME: ${{ github.event.inputs.rom_name }}
+      OUTPUT_FORMAT: ${{ github.event.inputs.output_format }}
+      BUILD_DIR: ${{ github.workspace }}/build
+      LIBDRAGON_DIR: ${{ github.workspace }}/libdragon
+      TOOLCHAIN_DIR: ${{ github.workspace }}/toolchain
+
     steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v4
+    - name: Checkout Repo
+      uses: actions/checkout@v4
 
-      - name: Install Dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y git make build-essential curl tar
+    - name: Install Dependencies
+      run: |
+        sudo apt update
+        sudo apt install -y git make gcc bison flex texinfo patch wget xz-utils python3 python3-pip
 
-      - name: Setup MIPS Toolchain
-        run: |
-          mkdir -p toolchain
-          curl -L https://github.com/DragonMinded/libdragon/releases/download/0.6.0/mips64el-elf-toolchain-ubuntu.tar.gz | tar xz -C toolchain
-          echo "$PWD/toolchain/bin" >> $GITHUB_PATH
+    - name: Setup MIPS Toolchain
+      run: |
+        mkdir -p $TOOLCHAIN_DIR
+        curl -L https://github.com/DragonMinded/libdragon/releases/download/0.6.0/mips64el-elf-toolchain-ubuntu-20221109.tar.xz -o $TOOLCHAIN_DIR/toolchain.tar.xz
+        tar -xJf $TOOLCHAIN_DIR/toolchain.tar.xz -C $TOOLCHAIN_DIR
+        echo "$TOOLCHAIN_DIR/bin" >> $GITHUB_PATH
 
-      - name: Build Libdragon
-        run: |
-          mkdir -p libdragon_build
-          make -C libdragon DESTDIR=$PWD/libdragon_build PREFIX=$PWD/libdragon_build install
+    - name: Build libdragon
+      run: |
+        git clone --depth 1 https://github.com/DragonMinded/libdragon.git $LIBDRAGON_DIR
+        mkdir -p $BUILD_DIR/libdragon_build
+        make -C $LIBDRAGON_DIR DESTDIR=$BUILD_DIR/libdragon_build install
 
-      - name: Build ROM
-        run: |
-          mkdir -p build
-          mips64el-elf-gcc -Ilibdragon_build/include main.c -Llibdragon_build/lib -ldragon -o build/main.elf
-          if [ "$ROM_TYPE" = "n64" ]; then
-            python3 libdragon/tools/elf2n64.py build/main.elf build/main.n64
-          elif [ "$ROM_TYPE" = "z64" ]; then
-            python3 libdragon/tools/elf2n64.py --z64 build/main.elf build/main.z64
-          elif [ "$ROM_TYPE" = "v64" ]; then
-            python3 libdragon/tools/elf2n64.py --v64 build/main.elf build/main.v64
-          else
-            echo "Invalid ROM_TYPE: $ROM_TYPE"
-            exit 1
-          fi
+    - name: Build ROM
+      run: |
+        mkdir -p $BUILD_DIR
+        make -C ${{ github.workspace }} OUTPUT_FORMAT=$OUTPUT_FORMAT ROM_NAME=$ROM_NAME BUILD_DIR=$BUILD_DIR
 
-      - name: Upload ROM
-        uses: actions/upload-artifact@v4
-        with:
-          name: n64-rom
-          path: build/*
+    - name: Upload ROM
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ github.event.inputs.rom_name }}-${{ github.event.inputs.output_format }}
+        path: $BUILD_DIR/${{ github.event.inputs.rom_name }}.${{ github.event.inputs.output_format }}
