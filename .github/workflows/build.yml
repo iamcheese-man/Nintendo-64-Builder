@@ -1,40 +1,45 @@
-name: Build N64 ROM
+name: Build N64 ROMs
 
 on:
   workflow_dispatch:
+    inputs:
+      rom-format:
+        description: 'Choose ROM format'
+        required: true
+        default: 'z64'
+        type: choice
+        options:
+          - z64
+          - n64
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v4
 
       - name: Install dependencies
         run: |
-          sudo apt update
-          sudo apt install -y build-essential git gcc-mips64-elf
+          sudo apt-get update
+          sudo apt-get install -y build-essential gcc-mips-linux-gnu libncurses5-dev git
 
-      - name: Clone libdragon
+      - name: Install libdragon
         run: |
-          git clone https://github.com/DragonMinded/libdragon.git
+          if [ ! -d "libdragon" ]; then
+            git clone https://github.com/DragonMinded/libdragon.git
+          fi
           cd libdragon
-          make
+          make install
 
       - name: Build ROM
         run: |
-          make
+          echo "Building ROM format: ${{ github.event.inputs.rom-format }}"
+          make OPTIONS="${{ github.event.inputs.rom-format }}"
 
-      - name: List built files
-        run: |
-          ls -l
-
-      - name: Upload ROM artifacts
-        uses: actions/upload-artifact@v3
+      - name: Upload ROM
+        uses: actions/upload-artifact@v4
         with:
-          name: n64-roms
-          path: |
-            mygame.z64
-            mygame.n64
-            mygame.v64
+          name: n64-rom
+          path: build/*
